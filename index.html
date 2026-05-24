@@ -1952,7 +1952,110 @@ MENDEEZ COMPANY INFO:
 HR POLICIES (Pakistan Labor Law):
 - Warning letters, termination, EOBI, income tax, disciplinary procedures — answer these too.
 
-When someone asks where to find data or how to do something in the dashboard, tell them exactly which page and which button/section to use. Be concise and practical.`;
+When someone asks where to find data or how to do something in the dashboard, tell them exactly which page and which button/section to use. Be concise and practical.
+
+DOCUMENT GENERATION:
+If the user asks to create a Word document or Excel file (e.g. warning letter, offer letter, salary slip, attendance report, leave report, payroll summary, employee list, job description, HR policy, contract, appraisal form, etc.), respond ONLY with a JSON block in this exact format (no other text before or after):
+
+For Word documents:
+{"docType":"word","filename":"filename.docx","title":"Document Title","content":"full document content here with \\n for new lines"}
+
+For Excel files:
+{"docType":"excel","filename":"filename.xlsx","sheetName":"Sheet Name","headers":["Col1","Col2","Col3"],"rows":[["val1","val2","val3"],["val4","val5","val6"]]}
+
+Make the content professional, detailed and complete. For Word docs include all proper sections, letterheads, signatures etc. For Excel include realistic headers and multiple sample rows relevant to Mendeez.`;
+
+    // detect if response is a document generation request
+    function hrParseDoc(text){
+      try{
+        const match = text.match(/\{[\s\S]*"docType"[\s\S]*\}/);
+        if(match) return JSON.parse(match[0]);
+      } catch(e){}
+      return null;
+    }
+
+    function hrGenerateWord(doc){
+      const html = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head><meta charset='utf-8'><title>${doc.title}</title>
+        <style>
+          body{font-family:Calibri,Arial,sans-serif;font-size:11pt;margin:40px;color:#222;}
+          h1{font-size:16pt;color:#1a1a2e;border-bottom:2px solid #d4b84a;padding-bottom:6px;}
+          h2{font-size:13pt;color:#1a1a2e;margin-top:18px;}
+          .header{text-align:center;margin-bottom:30px;}
+          .company{font-size:18pt;font-weight:bold;color:#d4b84a;letter-spacing:2px;}
+          .subtitle{font-size:10pt;color:#666;}
+          p{line-height:1.6;margin:8px 0;}
+          .signature{margin-top:40px;}
+          .field{display:inline-block;min-width:200px;border-bottom:1px solid #999;}
+        </style></head>
+        <body>
+          <div class="header">
+            <div class="company">MENDEEZ</div>
+            <div class="subtitle">Fashion Company · HR Department</div>
+          </div>
+          <h1>${doc.title}</h1>
+          <div>${doc.content.replace(/\n/g,'<br/>')}</div>
+        </body></html>`;
+      const blob = new Blob(['\ufeff'+html],{type:'application/msword'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href=url; a.download=doc.filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function hrGenerateExcel(doc){
+      // Build CSV then convert to Excel-compatible format
+      const rows = [doc.headers, ...doc.rows];
+      const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+      // Create Excel XML format
+      let xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="h"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1a1a2e" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style><Style ss:ID="s"><Interior ss:Color="#FFF8E1" ss:Pattern="Solid"/></Style><Style ss:ID="gold"><Font ss:Bold="1" ss:Color="#b8860b"/></Style></Styles><Worksheet ss:Name="${doc.sheetName||'Sheet1'}"><Table>`;
+      // Header row
+      xml += '<Row>';
+      doc.headers.forEach(h => xml += `<Cell ss:StyleID="h"><Data ss:Type="String">${h}</Data></Cell>`);
+      xml += '</Row>';
+      // Data rows
+      doc.rows.forEach((row,i) => {
+        xml += `<Row ss:StyleID="${i%2===0?'':'s'}">`;
+        row.forEach(cell => {
+          const isNum = !isNaN(cell) && cell!=='';
+          xml += `<Cell><Data ss:Type="${isNum?'Number':'String'}">${cell}</Data></Cell>`;
+        });
+        xml += '</Row>';
+      });
+      xml += '</Table></Worksheet></Workbook>';
+      const blob = new Blob([xml],{type:'application/vnd.ms-excel'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href=url; a.download=doc.filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function hrAddDocMsg(doc){
+      const isWord = doc.docType==='word';
+      const icon = isWord ? '📄' : '📊';
+      const color = isWord ? '#4f8cff' : '#00d4aa';
+      const label = isWord ? 'Word Document' : 'Excel File';
+      const div = document.createElement('div');
+      div.className='hrmsg bot';
+      div.style.cssText='padding:0;background:transparent;';
+      div.innerHTML = `
+        <div style="background:#1c2230;border:1px solid #2a3448;border-radius:12px;padding:14px;max-width:100%">
+          <div style="font-size:12px;color:#8b95a8;margin-bottom:8px">${icon} ${label} ready</div>
+          <div style="font-size:13px;font-weight:600;color:#e8ecf3;margin-bottom:12px">${doc.title||doc.filename}</div>
+          <button onclick="hrDownloadDoc(${JSON.stringify(doc).replace(/"/g,'&quot;')})" 
+            style="background:${color};border:none;border-radius:8px;padding:8px 18px;color:#0a0e14;font-weight:700;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:6px;">
+            ⬇ Download ${doc.filename}
+          </button>
+        </div>`;
+      hrAppendMsg(div);
+      hrHistory.push({role:'assistant',content:`I generated a ${label}: ${doc.filename}`});
+    }
+
+    window.hrDownloadDoc = function(doc){
+      if(doc.docType==='word') hrGenerateWord(doc);
+      else hrGenerateExcel(doc);
+    };
 
     try{
       const messages = [...hrHistory.slice(-8), {role:'user',content:userMsg}];
@@ -1964,7 +2067,7 @@ When someone asks where to find data or how to do something in the dashboard, te
         },
         body: JSON.stringify({
           model:'llama-3.3-70b-versatile',
-          max_tokens:1000,
+          max_tokens:3000,
           messages:[{role:'system',content:systemPrompt}, ...messages]
         })
       });
@@ -1972,7 +2075,13 @@ When someone asks where to find data or how to do something in the dashboard, te
       hrRemoveTyping();
       if(data.choices && data.choices[0] && data.choices[0].message){
         hrSetAvatarState('pointing');
-        hrAddBotMsg(data.choices[0].message.content);
+        const text = data.choices[0].message.content;
+        const doc = hrParseDoc(text);
+        if(doc){
+          hrAddDocMsg(doc);
+        } else {
+          hrAddBotMsg(text);
+        }
       } else if(data.error){
         console.error('API error:', data.error);
         hrSetAvatarState('idle');
@@ -1980,6 +2089,7 @@ When someone asks where to find data or how to do something in the dashboard, te
           ? 'Maafi chahta hoon, kuch masla hua: ' + (data.error.message||'Dobara try karein.')
           : 'Error: ' + (data.error.message||'Something went wrong. Please try again.'));
       } else {
+        hrSetAvatarState('idle');
         hrAddBotMsg(hrLang==='ur'?'Maafi chahta hoon, kuch masla hua. Dobara try karein.':'Sorry, something went wrong. Please try again.');
       }
     } catch(e){
