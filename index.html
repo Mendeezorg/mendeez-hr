@@ -1752,8 +1752,6 @@ renderOverview();
   let hrBusy = false;
   let hrHistory = [];
 
-  const IMG = 'data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABh...';
-
   function hrToggleChat(){
     hrChatOpen = !hrChatOpen;
     const win = document.getElementById('hr-chat-window');
@@ -1775,7 +1773,7 @@ renderOverview();
   function hrShowLangSelect(){
     const div = document.createElement('div');
     div.className='hrmsg bot';
-    div.innerHTML = '<div style="margin-bottom:8px;font-weight:500">Welcome to Mendeez HR! 👋<br>Please choose your language:</div><div class="hr-lang-btns"><button class="hr-lang-btn" onclick="hrSelectLang(\'en\')">🇬🇧 English</button><button class="hr-lang-btn" onclick="hrSelectLang(\'ur\')">🇵🇰 Roman Urdu</button></div>';
+    div.innerHTML = '<div style="margin-bottom:8px;font-weight:500">Welcome to Mendeez HR! 👋<br>Please choose your language:</div><div class="hr-lang-btns"><button class="hr-lang-btn" onclick="hrSelectLang(\x27en\x27)">🇬🇧 English</button><button class="hr-lang-btn" onclick="hrSelectLang(\x27ur\x27)">🇵🇰 Roman Urdu</button></div>';
     hrAppendMsg(div);
   }
 
@@ -1798,7 +1796,7 @@ renderOverview();
     const div = document.createElement('div');
     div.className='hrmsg bot';
     div.style.cssText='background:transparent;padding:0;';
-    div.innerHTML = '<div style="font-size:11px;color:#8b95a8;margin-bottom:5px">Quick questions:</div><div class="hr-quick-btns">' + questions.map(q=>`<button class="hr-quick-btn" onclick="hrQuickAsk('${q}')">${q}</button>`).join('') + '</div>';
+    div.innerHTML = '<div style="font-size:11px;color:#8b95a8;margin-bottom:5px">Quick questions:</div><div class="hr-quick-btns">' + questions.map(q=>'<button class="hr-quick-btn" onclick="hrQuickAsk(\x27'+q+'\x27)">'+q+'</button>').join('') + '</div>';
     hrAppendMsg(div);
   }
 
@@ -1858,7 +1856,11 @@ renderOverview();
       const messages = [...hrHistory.slice(-8), {role:'user',content:userMsg}];
       const res = await fetch('https://api.anthropic.com/v1/messages',{
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:{
+          'Content-Type':'application/json',
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
         body: JSON.stringify({
           model:'claude-sonnet-4-20250514',
           max_tokens:1000,
